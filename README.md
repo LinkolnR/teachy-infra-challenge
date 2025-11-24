@@ -2,103 +2,106 @@
 
 This repository contains the complete infrastructure solution for the Teachy Infrastructure Code Challenge. It implements a secure, serverless architecture on AWS using **Terragrunt**, Docker, and GitHub Actions.
 
-## 🏛️ Architecture
-
-The solution follows a secure, modular architecture designed for scalability and security:
-
-```mermaid
-graph TD
-    User[Internet User] --> ALB[Application Load Balancer]
-    Admin[VPN User] --> |VPN Tunnel| VPN[OpenVPN Server]
-    VPN --> ALB
-    
-    subgraph "VPC (10.0.0.0/16)"
-        subgraph "Public Subnets"
-            ALB
-            VPN
-            NAT[NAT Gateway (Optional)]
-        end
-        
-        subgraph "Private Subnets"
-            LambdaPub[Public Lambda]
-            LambdaPriv[Private Lambda]
-        end
-    end
-    
-    ALB --> |Path /| LambdaPub
-    ALB --> |Path /private + Source IP Check| LambdaPriv
-```
-
-### Key Decisions
-- **Terragrunt**: Implemented for DRY code and dependency management (Bonus Point ⭐).
-- **Cost Optimization**: NAT Gateway is optional via variable `enable_nat_gateway` (Default: false for dev to save cost).
-- **Security**: Private Lambda is protected by Security Groups AND ALB Listener Rules (checking Source IP of VPN).
-- **CI/CD**: GitHub Actions handles Docker builds and Terragrunt application.
 
 ---
 
-## 🛠️ Setup & Deployment
+## Why Terragrunt?
+
+We chose **Terragrunt** over vanilla Terraform to adhere to the **DRY (Don't Repeat Yourself)** principle and ensure scalable infrastructure management.
+
+1.  **DRY Backend Configuration**: Terragrunt allows us to define the S3 state backend configuration **once** in the root `terragrunt.hcl` and inherit it across all modules. In vanilla Terraform, this block must be copied to every single module, increasing maintenance burden and risk of errors.
+2.  **Dependency Management**: Terragrunt explicitly handles dependencies (e.g., *ALB depends on VPC*). The `run-all apply` command automatically builds the dependency graph and executes deployment in the correct parallel order.
+3.  **Environment Separation**: It enforces a clear separation between configuration (`live/`) and logic (`modules/`), making it trivial to spin up new environments (staging, prod) by simply creating a new folder structure without duplicating Terraform code.
+
+> [Gruntwork Documentation](https://terragrunt.gruntwork.io/)
+
+---
+
+## How to Run the Project
 
 ### Prerequisites
-- AWS CLI configured (`aws configure`)
-- Terraform & Terragrunt installed
-- Docker installed
+- **AWS CLI** configured (`aws configure`)
+- **Terraform** (v1.0+) & **Terragrunt** installed
+- **Docker** running locally
 
-### 1. Manual Setup (One-time)
-1. **Create SSH Key:**
-   ```bash
-   aws ec2 create-key-pair --key-name teachy-vpn-key --query 'KeyMaterial' --output text > teachy-vpn-key.pem
-   ```
-2. **GitHub Secrets:**
-   Add `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `TF_SSH_KEY_NAME` to repository secrets.
+### 1. Build & Push Docker Images
+The Lambdas run as container images. You must push them to your AWS ECR before deploying.
 
-### 2. Deployment
-To deploy the full infrastructure stack:
+#### Windows (PowerShell)
+```powershell
+# 1. Login to ECR
+$accountId = aws sts get-caller-identity --query "Account" --output text
+$registry = "$accountId.dkr.ecr.us-east-1.amazonaws.com"
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $registry
 
+# 2. Build & Push Public Lambda
+docker build -t teachy-public-lambda ./lambdas/public-api/
+docker tag teachy-public-lambda:latest "$registry/teachy-public-lambda:latest"
+docker push "$registry/teachy-public-lambda:latest"
+
+# 3. Build & Push Private Lambda
+docker build -t teachy-private-lambda ./lambdas/private-api/
+docker tag teachy-private-lambda:latest "$registry/teachy-private-lambda:latest"
+docker push "$registry/teachy-private-lambda:latest"
+```
+
+#### Linux / Mac (Bash)
 ```bash
+# 1. Login to ECR
+export ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+export REGISTRY="$ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com"
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $REGISTRY
+
+# 2. Build & Push Public Lambda
+docker build -t teachy-public-lambda ./lambdas/public-api/
+docker tag teachy-public-lambda:latest "$REGISTRY/teachy-public-lambda:latest"
+docker push "$REGISTRY/teachy-public-lambda:latest"
+
+# 3. Build & Push Private Lambda
+docker build -t teachy-private-lambda ./lambdas/private-api/
+docker tag teachy-private-lambda:latest "$REGISTRY/teachy-private-lambda:latest"
+docker push "$REGISTRY/teachy-private-lambda:latest"
+```
+
+### 2. Deploy Infrastructure
+Run the deployment using Terragrunt.
+
+#### Windows (PowerShell)
+```powershell
+# 1. Set Environment Variables
+$env:TF_VAR_public_lambda_image = "$registry/teachy-public-lambda:latest"
+$env:TF_VAR_private_lambda_image = "$registry/teachy-private-lambda:latest"
+$env:TF_VAR_ssh_key_name = "teachy-vpn-key" # Ensure this Key Pair exists in AWS
+
+# 2. Apply
 cd infrastructure/live/dev
 terragrunt run-all apply
 ```
 
+#### Linux / Mac (Bash)
+```bash
+# 1. Set Environment Variables
+export TF_VAR_public_lambda_image="$REGISTRY/teachy-public-lambda:latest"
+export TF_VAR_private_lambda_image="$REGISTRY/teachy-private-lambda:latest"
+export TF_VAR_ssh_key_name="teachy-vpn-key"
+
+# 2. Apply
+cd infrastructure/live/dev
+terragrunt run-all apply
+```
+
+### 3. Destroy Infrastructure
+
+
+```bash
+terragrunt run-all destroy
+```
+
 ---
 
-## 📸 Evidence of Completion
+## Evidence of Completion
 
-### 1. Infrastructure Deployment (Terragrunt Apply)
-Evidence that the infrastructure code is valid and deploys successfully.
-
-![Terragrunt Apply Success](imgs/output_apply.png)
-
-### 2. Public Access Test
-Evidence that the public endpoint is accessible from the internet.
-
-```bash
-curl http://<ALB_DNS_NAME>/
-```
-![Public Access Evidence](imgs/lambda_public.png)
-
-### 3. Private Access Blocked (Without VPN)
-Evidence that the private endpoint is **not** accessible without VPN (Returns 404/Forbidden).
-
-```bash
-curl http://<ALB_DNS_NAME>/private
-```
-![Private Blocked Evidence](imgs/lamda_private.png)
-
-### 4. VPN Connection & Private Access
-Evidence of successful access to the private endpoint via VPN connection (or authorized VPN instance).
-
-![Private Access Evidence](imgs/lamba_private_2.png)
-
-### 5. Container Registry (ECR)
-Evidence of Docker images successfully pushed to AWS ECR.
-
-![ECR Push Evidence](imgs/criando_repository.png)
-
-### 6. CI/CD Pipeline
-Evidence of automated deployment via GitHub Actions.
-
-*(Please verify the Actions tab in the GitHub repository)*
+https://youtu.be/_YHG5eaf6UU
 
 ---
 
@@ -125,18 +128,5 @@ Evidence of automated deployment via GitHub Actions.
 
 ---
 
-## 📜 Original Challenge Requirements
-*(Kept for reference)*
-
-### Core Requirements Checklist
-- [x] VPC Configuration
-- [x] Lambda Functions (Containerized)
-- [x] OpenVPN Server
-- [x] Application Load Balancer
-- [x] CloudWatch Logging
-- [x] Terraform State Management (S3 + DynamoDB)
-- [x] GitHub Actions CI/CD
-- [x] **Bonus:** Terragrunt Implementation
-
 ---
-*Solution by [Your Name]*
+*Solution by [Lincoln Melo]*

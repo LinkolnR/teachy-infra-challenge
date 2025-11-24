@@ -52,13 +52,11 @@ resource "aws_lb" "main" {
 resource "aws_lb_target_group" "public_lambda" {
   name        = "${var.project_name}-pub-tg"
   target_type = "lambda"
-  vpc_id      = var.vpc_id
 }
 
 resource "aws_lb_target_group" "private_lambda" {
   name        = "${var.project_name}-priv-tg"
   target_type = "lambda"
-  vpc_id      = var.vpc_id
 }
 
 resource "aws_lb_target_group_attachment" "public_lambda" {
