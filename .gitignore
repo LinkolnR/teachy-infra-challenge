@@ -1,101 +1,34 @@
 # Terraform
 .terraform/
 *.tfstate
-*.tfstate.*
+*.tfstate.backup
 *.tfvars
-*.tfvars.json
-.terraform.lock.hcl
-crash.log
-override.tf
-override.tf.json
-*_override.tf
-*_override.tf.json
-.terraformrc
-terraform.rc
-
-# Terragrunt
+*.tfplan
 .terragrunt-cache/
-terragrunt.hcl.backup
 
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
 *.so
-.Python
-env/
+.venv
 venv/
 ENV/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
 
-# Go
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-*.test
-*.out
-go.work
-vendor/
-
-# Node.js
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.npm
-.eslintcache
-.node_repl_history
-*.tgz
-.yarn-integrity
-
-# Docker
-.dockerignore
-
-# IDE
+# IDEs
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
-.DS_Store
 
-# AWS
-.aws/
+# Sensitive Data / Local Config
 *.pem
-*.key
-
-# Logs
-*.log
-logs/
-
-# Environment variables
+*.ovpn
+*.csv
 .env
-.env.local
-.env.*.local
+teachy-admin_accessKeys.csv
+teachy-vpn.ovpn
 
 # OS
-Thumbs.db
 .DS_Store
+Thumbs.db
 
-# Temporary files
-*.tmp
-*.temp
-*.bak
-*.backup
-
+# Temporary Prints
+prints/
